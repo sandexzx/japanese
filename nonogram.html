@@ -705,7 +705,17 @@
         function clearGrid() {
             solveQueue = [];
             isSolving = false;
-            createGrid();
+            
+            // Очищаем только игровое поле, сохраняя подсказки
+            for (let i = 0; i < height; i++) {
+                for (let j = 0; j < width; j++) {
+                    grid[i][j] = 0;
+                    updateCell(i, j);
+                }
+            }
+            
+            updateStats();
+            hideSolverInfo();
         }
 
         function updateStats() {
