@@ -244,6 +244,7 @@
         let height = 10;
         let currentFocusedInput = null;
         let isSolving = false;
+        let solveQueue = []; // Наша очередь ходов
 
         function createGrid() {
             width = parseInt(document.getElementById('width').value);
@@ -310,6 +311,7 @@
         }
 
         function updateTopHint(e) {
+            solveQueue = [];
             const col = parseInt(e.target.dataset.col);
             topHints[col] = parseHints(e.target.value);
             // Для удобства заполнения, объединяем все инпуты в один массив
@@ -321,6 +323,7 @@
         }
 
         function updateLeftHint(e) {
+            solveQueue = [];
             const row = parseInt(e.target.dataset.row);
              let allInputs = [];
              document.querySelectorAll(`input[data-row="${row}"]`).forEach(input => {
@@ -330,6 +333,7 @@
         }
 
         function handleCellClick(e) {
+            solveQueue = [];
             const row = parseInt(e.target.dataset.row);
             const col = parseInt(e.target.dataset.col);
             
@@ -340,6 +344,7 @@
 
         function handleRightClick(e) {
             e.preventDefault();
+            solveQueue = [];
             const row = parseInt(e.target.dataset.row);
             const col = parseInt(e.target.dataset.col);
             
@@ -434,23 +439,37 @@
         }
 
         function solveStep() {
-            const changes = findGuaranteedCells();
-            
-            if (changes.length === 0) {
-                showSolverInfo('Больше нет очевидных ходов! 🤔', calculateProgress());
-                setTimeout(hideSolverInfo, 2000);
-                return false;
+            // Если наша очередь пуста, ищем новые ходы
+            if (solveQueue.length === 0) {
+                const changes = findGuaranteedCells();
+                if (changes.length === 0) {
+                    showSolverInfo('Больше нет очевидных ходов! 🤔', calculateProgress());
+                    setTimeout(hideSolverInfo, 2000);
+                    return false;
+                }
+                solveQueue = changes; // Заполняем очередь
+                showSolverInfo(`Найдено ${solveQueue.length} ходов. Жми "Шаг", чтобы применить.`, calculateProgress());
             }
+
+            // Достаем один ход из начала очереди
+            const change = solveQueue.shift();
+            if (!change) return; // На всякий случай
+
+            grid[change.row][change.col] = change.value;
+            updateCell(change.row, change.col);
+
+            // Даем фидбэк, что именно сделали
+            const cell = document.querySelector(`[data-row="${change.row}"][data-col="${change.col}"]`);
+            const actionText = change.value === 1 ? 'Закрашена' : 'Поставлен крестик в';
+            const highlightClass = change.value === 1 ? 'highlight-guaranteed-fill' : 'highlight-guaranteed-cross';
             
-            // Применим все гарантированные изменения за один шаг
-            changes.forEach(change => {
-                grid[change.row][change.col] = change.value;
-                updateCell(change.row, change.col);
-            });
+            cell.classList.add(highlightClass);
+            showSolverInfo(`${actionText} клетке [${change.row + 1}, ${change.col + 1}]. Осталось ${solveQueue.length} ходов в этой итерации.`, calculateProgress());
             
-            const fillCount = changes.filter(c => c.value === 1).length;
-            const crossCount = changes.filter(c => c.value === -1).length;
-            showSolverInfo(`Применено ${fillCount} закрашиваний и ${crossCount} крестиков.`, calculateProgress());
+            setTimeout(() => {
+                cell.classList.remove(highlightClass);
+                if (solveQueue.length === 0) hideSolverInfo();
+            }, 1500);
 
             updateStats();
             return true;
@@ -668,6 +687,7 @@
         }
 
         function clearGrid() {
+            solveQueue = [];
             isSolving = false;
             createGrid();
         }
