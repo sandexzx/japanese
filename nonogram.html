@@ -217,6 +217,8 @@
         <button onclick="solveStep()">📐 Шаг решения</button>
         <button onclick="solveFull()">🚀 Решить полностью</button>
         <button onclick="clearGrid()">Очистить</button>
+        <button onclick="saveHints()">💾 Сохранить подсказки</button>
+        <button onclick="loadHints()">📁 Загрузить подсказки</button>
     </div>
 
     <div id="gameContainer"></div>
@@ -313,23 +315,27 @@
         function updateTopHint(e) {
             solveQueue = [];
             const col = parseInt(e.target.dataset.col);
-            topHints[col] = parseHints(e.target.value);
-            // Для удобства заполнения, объединяем все инпуты в один массив
-            let allInputs = [];
-             document.querySelectorAll(`input[data-col="${col}"]`).forEach(input => {
-                allInputs = [...allInputs, ...parseHints(input.value)];
+            
+            // Собираем все непустые значения из инпутов данного столбца
+            let allHints = [];
+            document.querySelectorAll(`input[data-col="${col}"]`).forEach(input => {
+                const hints = parseHints(input.value);
+                allHints = [...allHints, ...hints];
             });
-            topHints[col] = allInputs;
+            topHints[col] = allHints;
         }
 
         function updateLeftHint(e) {
             solveQueue = [];
             const row = parseInt(e.target.dataset.row);
-             let allInputs = [];
-             document.querySelectorAll(`input[data-row="${row}"]`).forEach(input => {
-                allInputs = [...allInputs, ...parseHints(input.value)];
+            
+            // Собираем все непустые значения из инпутов данной строки
+            let allHints = [];
+            document.querySelectorAll(`input[data-row="${row}"]`).forEach(input => {
+                const hints = parseHints(input.value);
+                allHints = [...allHints, ...hints];
             });
-            leftHints[row] = allInputs;
+            leftHints[row] = allHints;
         }
 
         function handleCellClick(e) {
@@ -728,6 +734,90 @@
             if(nextInput) {
                 e.preventDefault();
                 nextInput.focus();
+            }
+        }
+
+        function saveHints() {
+            const hintsData = {
+                width: width,
+                height: height,
+                topHints: topHints,
+                leftHints: leftHints
+            };
+            
+            const dataStr = JSON.stringify(hintsData, null, 2);
+            const dataBlob = new Blob([dataStr], {type: 'application/json'});
+            
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(dataBlob);
+            link.download = 'nonogram_hints.json';
+            link.click();
+        }
+        
+        function loadHints() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+            input.onchange = function(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const hintsData = JSON.parse(e.target.result);
+                        
+                        if (hintsData.width && hintsData.height && hintsData.topHints && hintsData.leftHints) {
+                            document.getElementById('width').value = hintsData.width;
+                            document.getElementById('height').value = hintsData.height;
+                            
+                            createGrid();
+                            
+                            topHints = hintsData.topHints;
+                            leftHints = hintsData.leftHints;
+                            
+                            populateHintInputs();
+                            showSolverInfo('Подсказки успешно загружены!', 0);
+                            setTimeout(hideSolverInfo, 2000);
+                        } else {
+                            alert('Неверный формат файла!');
+                        }
+                    } catch (error) {
+                        alert('Ошибка при чтении файла: ' + error.message);
+                    }
+                };
+                reader.readAsText(file);
+            };
+            input.click();
+        }
+        
+        function populateHintInputs() {
+            const maxTopHints = Math.ceil(height / 2);
+            const maxLeftHints = Math.ceil(width / 2);
+            
+            // Очищаем все поля подсказок перед заполнением
+            document.querySelectorAll('.hint-cell input').forEach(input => input.value = '');
+            
+            // Заполняем верхние подсказки (столбцы)
+            for (let col = 0; col < width; col++) {
+                if (topHints[col] && topHints[col].length > 0) {
+                    const hints = topHints[col];
+                    for (let i = 0; i < hints.length && i < maxTopHints; i++) {
+                        const input = document.querySelector(`input[data-col="${col}"][data-hint-row="${i}"]`);
+                        if (input) input.value = hints[i];
+                    }
+                }
+            }
+            
+            // Заполняем левые подсказки (строки)
+            for (let row = 0; row < height; row++) {
+                if (leftHints[row] && leftHints[row].length > 0) {
+                    const hints = leftHints[row];
+                    for (let i = 0; i < hints.length && i < maxLeftHints; i++) {
+                        const input = document.querySelector(`input[data-row="${row}"][data-hint-col="${i}"]`);
+                        if (input) input.value = hints[i];
+                    }
+                }
             }
         }
 
