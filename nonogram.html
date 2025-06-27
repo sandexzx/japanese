@@ -798,23 +798,27 @@
             // Очищаем все поля подсказок перед заполнением
             document.querySelectorAll('.hint-cell input').forEach(input => input.value = '');
             
-            // Заполняем верхние подсказки (столбцы)
+            // Заполняем верхние подсказки (столбцы) - начинаем с ближайших к игровому полю
             for (let col = 0; col < width; col++) {
                 if (topHints[col] && topHints[col].length > 0) {
                     const hints = topHints[col];
                     for (let i = 0; i < hints.length && i < maxTopHints; i++) {
-                        const input = document.querySelector(`input[data-col="${col}"][data-hint-row="${i}"]`);
+                        // Ближайшая к игровому полю ячейка имеет наибольший индекс
+                        const hintRowIndex = maxTopHints - 1 - i;
+                        const input = document.querySelector(`input[data-col="${col}"][data-hint-row="${hintRowIndex}"]`);
                         if (input) input.value = hints[i];
                     }
                 }
             }
             
-            // Заполняем левые подсказки (строки)
+            // Заполняем левые подсказки (строки) - начинаем с ближайших к игровому полю
             for (let row = 0; row < height; row++) {
                 if (leftHints[row] && leftHints[row].length > 0) {
                     const hints = leftHints[row];
                     for (let i = 0; i < hints.length && i < maxLeftHints; i++) {
-                        const input = document.querySelector(`input[data-row="${row}"][data-hint-col="${i}"]`);
+                        // Ближайшая к игровому полю ячейка имеет наибольший индекс
+                        const hintColIndex = maxLeftHints - 1 - i;
+                        const input = document.querySelector(`input[data-row="${row}"][data-hint-col="${hintColIndex}"]`);
                         if (input) input.value = hints[i];
                     }
                 }
