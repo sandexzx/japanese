@@ -487,31 +487,41 @@
             
             showSolverInfo('Начинаю автоматическое решение... 🚀', calculateProgress());
             
-            let changedInLoop = true;
-            let steps = 0;
-            while(changedInLoop && isSolving) {
-                const changes = findGuaranteedCells();
-                if (changes.length > 0) {
-                    changes.forEach(change => {
-                        grid[change.row][change.col] = change.value;
-                        updateCell(change.row, change.col);
-                    });
-                    steps++;
+            let totalSteps = 0;
+            let hasMoreMoves = true;
+            
+            while(hasMoreMoves && isSolving) {
+                // Если очередь пуста, ищем новые ходы
+                if (solveQueue.length === 0) {
+                    const changes = findGuaranteedCells();
+                    if (changes.length === 0) {
+                        hasMoreMoves = false;
+                        break;
+                    }
+                    solveQueue = changes;
+                }
+                
+                // Выполняем один ход из очереди
+                if (solveQueue.length > 0) {
+                    const change = solveQueue.shift();
+                    grid[change.row][change.col] = change.value;
+                    updateCell(change.row, change.col);
+                    totalSteps++;
+                    
                     updateProgress(calculateProgress());
                     updateStats();
+                    
                     // Даем браузеру отрисовать изменения
-                    await new Promise(resolve => setTimeout(resolve, 50)); 
-                } else {
-                    changedInLoop = false;
+                    await new Promise(resolve => setTimeout(resolve, 30));
                 }
             }
             
             isSolving = false;
             const progress = calculateProgress();
             if (progress === 100) {
-                showSolverInfo(`Решено за ${steps} итераций! 🎉`, 100);
+                showSolverInfo(`Решено за ${totalSteps} шагов! 🎉`, 100);
             } else {
-                showSolverInfo(`Сделано ${steps} итераций. Дальше нужна продвинутая логика или гадание.`, progress);
+                showSolverInfo(`Сделано ${totalSteps} шагов. Дальше нужна продвинутая логика или гадание.`, progress);
             }
             setTimeout(hideSolverInfo, 4000);
         }
