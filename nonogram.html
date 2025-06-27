@@ -249,7 +249,7 @@
     <div class="stats">
         <div id="statsInfo"></div>
         <div class="legend">
-            ЛКМ - закрасить | ПКМ - крестик | Оранжевые строки - можно что-то заполнить
+            ЛКМ - закрасить | ПКМ - крестик | Стрелки - навигация по подсказкам | Оранжевые строки - можно что-то заполнить
         </div>
     </div>
 
@@ -259,6 +259,7 @@
         let leftHints = [];
         let width = 10;
         let height = 10;
+        let currentFocusedInput = null;
 
         function createGrid() {
             width = parseInt(document.getElementById('width').value);
@@ -298,6 +299,8 @@
                     input.dataset.col = j;
                     input.dataset.hintRow = i;
                     input.onchange = updateTopHint;
+                    input.onfocus = () => currentFocusedInput = input;
+                    input.onkeydown = handleHintKeyDown;
                     cell.appendChild(input);
                 }
             }
@@ -315,6 +318,8 @@
                     input.dataset.row = i;
                     input.dataset.hintCol = j;
                     input.onchange = updateLeftHint;
+                    input.onfocus = () => currentFocusedInput = input;
+                    input.onkeydown = handleHintKeyDown;
                     cell.appendChild(input);
                 }
                 
@@ -1038,6 +1043,93 @@
             
             document.getElementById('statsInfo').innerHTML = 
                 `Закрашено: ${filled} | Крестиков: ${crossed} | Всего клеток: ${width * height}`;
+        }
+
+        // Функция обработки нажатий клавиш для навигации по подсказкам
+        function handleHintKeyDown(e) {
+            if (!currentFocusedInput) return;
+            
+            const isTopHint = currentFocusedInput.dataset.col !== undefined;
+            const isLeftHint = currentFocusedInput.dataset.row !== undefined;
+            
+            let nextInput = null;
+            
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (isTopHint) {
+                    // Движение вверх по столбцу подсказок
+                    const col = parseInt(currentFocusedInput.dataset.col);
+                    const hintRow = parseInt(currentFocusedInput.dataset.hintRow);
+                    if (hintRow > 0) {
+                        nextInput = document.querySelector(`input[data-col="${col}"][data-hint-row="${hintRow - 1}"]`);
+                    }
+                } else if (isLeftHint) {
+                    // Движение вверх по левым подсказкам
+                    const row = parseInt(currentFocusedInput.dataset.row);
+                    const hintCol = parseInt(currentFocusedInput.dataset.hintCol);
+                    if (row > 0) {
+                        nextInput = document.querySelector(`input[data-row="${row - 1}"][data-hint-col="${hintCol}"]`);
+                    }
+                }
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (isTopHint) {
+                    // Движение вниз по столбцу подсказок
+                    const col = parseInt(currentFocusedInput.dataset.col);
+                    const hintRow = parseInt(currentFocusedInput.dataset.hintRow);
+                    const maxTopHints = Math.ceil(height / 2);
+                    if (hintRow < maxTopHints - 1) {
+                        nextInput = document.querySelector(`input[data-col="${col}"][data-hint-row="${hintRow + 1}"]`);
+                    }
+                } else if (isLeftHint) {
+                    // Движение вниз по левым подсказкам
+                    const row = parseInt(currentFocusedInput.dataset.row);
+                    const hintCol = parseInt(currentFocusedInput.dataset.hintCol);
+                    if (row < height - 1) {
+                        nextInput = document.querySelector(`input[data-row="${row + 1}"][data-hint-col="${hintCol}"]`);
+                    }
+                }
+            } else if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                if (isTopHint) {
+                    // Движение влево по верхним подсказкам
+                    const col = parseInt(currentFocusedInput.dataset.col);
+                    const hintRow = parseInt(currentFocusedInput.dataset.hintRow);
+                    if (col > 0) {
+                        nextInput = document.querySelector(`input[data-col="${col - 1}"][data-hint-row="${hintRow}"]`);
+                    }
+                } else if (isLeftHint) {
+                    // Движение влево по левым подсказкам
+                    const row = parseInt(currentFocusedInput.dataset.row);
+                    const hintCol = parseInt(currentFocusedInput.dataset.hintCol);
+                    if (hintCol > 0) {
+                        nextInput = document.querySelector(`input[data-row="${row}"][data-hint-col="${hintCol - 1}"]`);
+                    }
+                }
+            } else if (e.key === 'ArrowRight') {
+                e.preventDefault();
+                if (isTopHint) {
+                    // Движение вправо по верхним подсказкам
+                    const col = parseInt(currentFocusedInput.dataset.col);
+                    const hintRow = parseInt(currentFocusedInput.dataset.hintRow);
+                    if (col < width - 1) {
+                        nextInput = document.querySelector(`input[data-col="${col + 1}"][data-hint-row="${hintRow}"]`);
+                    }
+                } else if (isLeftHint) {
+                    // Движение вправо по левым подсказкам
+                    const row = parseInt(currentFocusedInput.dataset.row);
+                    const hintCol = parseInt(currentFocusedInput.dataset.hintCol);
+                    const maxLeftHints = Math.ceil(width / 2);
+                    if (hintCol < maxLeftHints - 1) {
+                        nextInput = document.querySelector(`input[data-row="${row}"][data-hint-col="${hintCol + 1}"]`);
+                    }
+                }
+            }
+            
+            if (nextInput) {
+                nextInput.focus();
+                currentFocusedInput = nextInput;
+            }
         }
 
         // Инициализация при загрузке
