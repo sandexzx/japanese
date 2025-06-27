@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nonogram Solver Pro</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h1 {
+            color: #f39c12;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+
+        .controls {
+            background: #16213e;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+
+        .controls label {
+            margin-right: 10px;
+        }
+
+        .controls input {
+            width: 60px;
+            padding: 5px;
+            margin-right: 20px;
+            border: none;
+            border-radius: 5px;
+            background: #0f3460;
+            color: #fff;
+        }
+
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 5px;
+            background: #e94560;
+            color: white;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+
+        button:hover {
+            background: #c13651;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+
+        #gameContainer {
+            position: relative;
+            display: inline-block;
+            background: #0f3460;
+            padding: 10px;
+            border-radius: 10px;
+            box-shadow: 0 6px 12px rgba(0,0,0,0.4);
+        }
+
+        table {
+            border-collapse: collapse;
+        }
+
+        td {
+            width: 30px;
+            height: 30px;
+            border: 1px solid #333;
+            text-align: center;
+            position: relative;
+            font-size: 12px;
+            user-select: none;
+        }
+
+        .hint-cell {
+            background: #16213e;
+            color: #f39c12;
+            font-weight: bold;
+        }
+
+        .hint-cell input {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background: transparent;
+            color: #f39c12;
+            text-align: center;
+            font-weight: bold;
+            font-size: 12px;
+        }
+
+        .game-cell {
+            background: #2d2d44;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .game-cell:hover {
+            background: #3d3d54;
+        }
+
+        .filled {
+            background: #27ae60 !important;
+        }
+
+        .crossed {
+            background: #2d2d44;
+        }
+
+        .crossed::before,
+        .crossed::after {
+            content: '';
+            position: absolute;
+            width: 80%;
+            height: 2px;
+            background: #e74c3c;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(45deg);
+        }
+
+        .crossed::after {
+            transform: translate(-50%, -50%) rotate(-45deg);
+        }
+
+        .highlight-row {
+            background: #f39c12 !important;
+            opacity: 0.3;
+        }
+
+        .hint-possible {
+            background: #e67e22 !important;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.6; }
+            50% { opacity: 1; }
+            100% { opacity: 0.6; }
+        }
+
+        .stats {
+            margin-top: 20px;
+            padding: 15px;
+            background: #16213e;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .highlight-guaranteed-fill {
+            animation: pulse-green 2s;
+            background: #f1c40f !important;
+        }
+        
+        .highlight-guaranteed-cross {
+            animation: pulse-red 2s;
+            background: #e74c3c !important;
+        }
+        
+        @keyframes pulse-green {
+            0% { background: #2d2d44; }
+            50% { background: #f1c40f; }
+            100% { background: #2d2d44; }
+        }
+        
+        @keyframes pulse-red {
+            0% { background: #2d2d44; }
+            50% { background: #e74c3c; }
+            100% { background: #2d2d44; }
+        }
+        
+        .solver-info {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #16213e;
+            padding: 15px;
+            border-radius: 10px;
+            max-width: 300px;
+            display: none;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        
+        .solver-info h3 {
+            color: #f39c12;
+            margin-bottom: 10px;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #0f3460;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #27ae60, #f39c12);
+            transition: width 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎮 Nonogram Solver Pro 🎮</h1>
+    
+    <div class="controls">
+        <label>Ширина:</label>
+        <input type="number" id="width" value="10" min="5" max="30">
+        <label>Высота:</label>
+        <input type="number" id="height" value="10" min="5" max="30">
+        <button onclick="createGrid()">Создать поле</button>
+        <button onclick="checkPossibleLines()">Проверить линии</button>
+        <button onclick="showHints()">🔍 Подсказка</button>
+        <button onclick="solveStep()">📐 Шаг решения</button>
+        <button onclick="solveFull()">🚀 Решить полностью</button>
+        <button onclick="clearGrid()">Очистить</button>
+    </div>
+
+    <div id="gameContainer"></div>
+    
+    <div class="solver-info" id="solverInfo">
+        <h3>🧠 Логика решения</h3>
+        <div id="solverMessage"></div>
+        <div class="progress-bar">
+            <div class="progress-fill" id="progressFill"></div>
+        </div>
+    </div>
+
+    <div class="stats">
+        <div id="statsInfo"></div>
+        <div class="legend">
+            ЛКМ - закрасить | ПКМ - крестик | Оранжевые строки - можно что-то заполнить
+        </div>
+    </div>
+
+    <script>
+        let grid = [];
+        let topHints = [];
+        let leftHints = [];
+        let width = 10;
+        let height = 10;
+
+        function createGrid() {
+            width = parseInt(document.getElementById('width').value);
+            height = parseInt(document.getElementById('height').value);
+            
+            const container = document.getElementById('gameContainer');
+            container.innerHTML = '';
+            
+            // Инициализация массивов
+            grid = Array(height).fill().map(() => Array(width).fill(0));
+            topHints = Array(width).fill().map(() => []);
+            leftHints = Array(height).fill().map(() => []);
+            
+            // Создание таблицы
+            const table = document.createElement('table');
+            
+            // Определяем максимальное количество подсказок
+            const maxTopHints = Math.ceil(height / 2);
+            const maxLeftHints = Math.ceil(width / 2);
+            
+            // Создаем строки для верхних подсказок
+            for (let i = 0; i < maxTopHints; i++) {
+                const row = table.insertRow();
+                
+                // Пустые ячейки слева
+                for (let j = 0; j < maxLeftHints; j++) {
+                    const cell = row.insertCell();
+                    cell.className = 'hint-cell';
+                }
+                
+                // Ячейки для подсказок столбцов
+                for (let j = 0; j < width; j++) {
+                    const cell = row.insertCell();
+                    cell.className = 'hint-cell';
+                    const input = document.createElement('input');
+                    input.type = 'text';
+                    input.dataset.col = j;
+                    input.dataset.hintRow = i;
+                    input.onchange = updateTopHint;
+                    cell.appendChild(input);
+                }
+            }
+            
+            // Создаем игровое поле
+            for (let i = 0; i < height; i++) {
+                const row = table.insertRow();
+                
+                // Ячейки для левых подсказок
+                for (let j = 0; j < maxLeftHints; j++) {
+                    const cell = row.insertCell();
+                    cell.className = 'hint-cell';
+                    const input = document.createElement('input');
+                    input.type = 'text';
+                    input.dataset.row = i;
+                    input.dataset.hintCol = j;
+                    input.onchange = updateLeftHint;
+                    cell.appendChild(input);
+                }
+                
+                // Игровые ячейки
+                for (let j = 0; j < width; j++) {
+                    const cell = row.insertCell();
+                    cell.className = 'game-cell';
+                    cell.dataset.row = i;
+                    cell.dataset.col = j;
+                    cell.onclick = handleCellClick;
+                    cell.oncontextmenu = handleRightClick;
+                }
+            }
+            
+            container.appendChild(table);
+            updateStats();
+        }
+
+        function updateTopHint(e) {
+            const col = parseInt(e.target.dataset.col);
+            const hintRow = parseInt(e.target.dataset.hintRow);
+            const value = e.target.value.trim();
+            
+            if (!topHints[col]) topHints[col] = [];
+            
+            if (value) {
+                topHints[col][hintRow] = parseInt(value);
+            } else {
+                topHints[col][hintRow] = null;
+            }
+            
+            // Убираем null значения
+            topHints[col] = topHints[col].filter(h => h !== null);
+        }
+
+        function updateLeftHint(e) {
+            const row = parseInt(e.target.dataset.row);
+            const hintCol = parseInt(e.target.dataset.hintCol);
+            const value = e.target.value.trim();
+            
+            if (!leftHints[row]) leftHints[row] = [];
+            
+            if (value) {
+                leftHints[row][hintCol] = parseInt(value);
+            } else {
+                leftHints[row][hintCol] = null;
+            }
+            
+            // Убираем null значения
+            leftHints[row] = leftHints[row].filter(h => h !== null);
+        }
+
+        function handleCellClick(e) {
+            const row = parseInt(e.target.dataset.row);
+            const col = parseInt(e.target.dataset.col);
+            
+            if (grid[row][col] === 1) {
+                grid[row][col] = 0;
+                e.target.classList.remove('filled');
+            } else {
+                grid[row][col] = 1;
+                e.target.classList.add('filled');
+                e.target.classList.remove('crossed');
+            }
+            
+            updateStats();
+        }
+
+        function handleRightClick(e) {
+            e.preventDefault();
+            const row = parseInt(e.target.dataset.row);
+            const col = parseInt(e.target.dataset.col);
+            
+            if (e.target.classList.contains('crossed')) {
+                grid[row][col] = 0;
+                e.target.classList.remove('crossed');
+            } else {
+                grid[row][col] = -1;
+                e.target.classList.add('crossed');
+                e.target.classList.remove('filled');
+            }
+            
+            updateStats();
+        }
+
+        function checkPossibleLines() {
+            // Сбрасываем подсветку
+            document.querySelectorAll('.hint-cell').forEach(cell => {
+                cell.classList.remove('hint-possible');
+            });
+            
+            // Проверяем строки
+            for (let i = 0; i < height; i++) {
+                const hints = leftHints[i];
+                if (hints.length > 0) {
+                    const minFilled = hints.reduce((sum, h) => sum + h, 0) + hints.length - 1;
+                    const maxHint = Math.max(...hints);
+                    
+                    if (minFilled > width / 2 || maxHint > width / 2) {
+                        // Подсвечиваем ячейки подсказок этой строки
+                        document.querySelectorAll(`input[data-row="${i}"]`).forEach(input => {
+                            input.parentElement.classList.add('hint-possible');
+                        });
+                    }
+                }
+            }
+            
+            // Проверяем столбцы
+            for (let j = 0; j < width; j++) {
+                const hints = topHints[j];
+                if (hints.length > 0) {
+                    const minFilled = hints.reduce((sum, h) => sum + h, 0) + hints.length - 1;
+                    const maxHint = Math.max(...hints);
+                    
+                    if (minFilled > height / 2 || maxHint > height / 2) {
+                        // Подсвечиваем ячейки подсказок этого столбца
+                        document.querySelectorAll(`input[data-col="${j}"]`).forEach(input => {
+                            input.parentElement.classList.add('hint-possible');
+                        });
+                    }
+                }
+            }
+        }
+
+        function showHints() {
+            const changes = findGuaranteedCells();
+            
+            if (changes.length === 0) {
+                showSolverInfo('Нет очевидных ходов! Попробуй логику 🧠', calculateProgress());
+                setTimeout(() => hideSolverInfo(), 2000);
+                return;
+            }
+            
+            // Группируем изменения по типу для лучшего описания
+            const fillCount = changes.filter(c => c.value === 1).length;
+            const crossCount = changes.filter(c => c.value === -1).length;
+            
+            // Подсвечиваем найденные клетки
+            changes.forEach(change => {
+                const cell = document.querySelector(`[data-row="${change.row}"][data-col="${change.col}"]`);
+                if (change.value === 1) {
+                    cell.classList.add('highlight-guaranteed-fill');
+                } else if (change.value === -1) {
+                    cell.classList.add('highlight-guaranteed-cross');
+                }
+            });
+            
+            let message = `Найдено: `;
+            if (fillCount > 0) message += `${fillCount} для закраски`;
+            if (fillCount > 0 && crossCount > 0) message += `, `;
+            if (crossCount > 0) message += `${crossCount} для крестиков`;
+            
+            showSolverInfo(message, calculateProgress());
+            
+            // Убираем подсветку через 2 секунды
+            setTimeout(() => {
+                document.querySelectorAll('.highlight-guaranteed-fill, .highlight-guaranteed-cross').forEach(cell => {
+                    cell.classList.remove('highlight-guaranteed-fill', 'highlight-guaranteed-cross');
+                });
+                hideSolverInfo();
+            }, 2000);
+        }
+        
+        function solveStep() {
+            const changes = findGuaranteedCells();
+            
+            if (changes.length === 0) {
+                showSolverInfo('Больше нет очевидных ходов! 🤔', calculateProgress());
+                setTimeout(() => hideSolverInfo(), 2000);
+                return false;
+            }
+            
+            // Сортируем изменения по приоритету (сначала те, которые подтверждены и строкой, и столбцом)
+            changes.sort((a, b) => {
+                // Приоритет отдаем тем клеткам, которые найдены обоими способами
+                const aScore = (a.foundByRow ? 1 : 0) + (a.foundByCol ? 1 : 0);
+                const bScore = (b.foundByRow ? 1 : 0) + (b.foundByCol ? 1 : 0);
+                return bScore - aScore;
+            });
+            
+            // Применяем первое найденное изменение
+            const change = changes[0];
+            grid[change.row][change.col] = change.value;
+            
+            const cell = document.querySelector(`[data-row="${change.row}"][data-col="${change.col}"]`);
+            if (change.value === 1) {
+                cell.classList.add('filled');
+                cell.classList.remove('crossed');
+                showSolverInfo(`Закрашиваю клетку [${change.row + 1}, ${change.col + 1}] по правилу: ${change.reason}`, calculateProgress());
+            } else if (change.value === -1) {
+                cell.classList.add('crossed');
+                cell.classList.remove('filled');
+                showSolverInfo(`Ставлю крестик в [${change.row + 1}, ${change.col + 1}] по правилу: ${change.reason}`, calculateProgress());
+            }
+            
+            updateStats();
+            
+            setTimeout(() => hideSolverInfo(), 3000);
+            return true;
+        }
+        
+        function solveFull() {
+            let steps = 0;
+            let solving = true;
+            
+            showSolverInfo('Начинаю автоматическое решение... 🚀', 0);
+            
+            function solveNextStep() {
+                if (!solving) return;
+                
+                if (solveStep()) {
+                    steps++;
+                    const progress = calculateProgress();
+                    updateProgress(progress);
+                    
+                    // Делаем паузу между шагами для визуализации
+                    setTimeout(solveNextStep, 100);
+                } else {
+                    solving = false;
+                    const progress = calculateProgress();
+                    
+                    if (progress === 100) {
+                        showSolverInfo(`Решено за ${steps} шагов! 🎉`, 100);
+                    } else {
+                        showSolverInfo(`Сделано ${steps} шагов. Дальше нужна продвинутая логика! 🧩`, progress);
+                    }
+                    
+                    setTimeout(() => hideSolverInfo(), 3000);
+                }
+            }
+            
+            solveNextStep();
+        }
+        
+        function findGuaranteedCells() {
+            const changes = [];
+            const rowResults = [];
+            const colResults = [];
+            
+            // Анализируем все строки
+            for (let i = 0; i < height; i++) {
+                const hints = leftHints[i];
+                if (hints.length === 0) {
+                    // Если нет подсказок, вся строка должна быть крестиками
+                    rowResults[i] = Array(width).fill(-1);
+                } else {
+                    rowResults[i] = analyzeLine(grid[i], hints, width);
+                }
+            }
+            
+            // Анализируем все столбцы
+            for (let j = 0; j < width; j++) {
+                const hints = topHints[j];
+                const column = [];
+                for (let i = 0; i < height; i++) {
+                    column.push(grid[i][j]);
+                }
+                
+                if (hints.length === 0) {
+                    // Если нет подсказок, весь столбец должен быть крестиками
+                    colResults[j] = Array(height).fill(-1);
+                } else {
+                    colResults[j] = analyzeLine(column, hints, height);
+                }
+            }
+            
+            // Находим клетки, которые гарантированы с обеих сторон
+            for (let i = 0; i < height; i++) {
+                for (let j = 0; j < width; j++) {
+                    if (grid[i][j] !== 0) continue; // Уже заполнена
+                    
+                    const rowValue = rowResults[i] ? rowResults[i][j] : null;
+                    const colValue = colResults[j] ? colResults[j][i] : null;
+                    
+                    // Проверяем согласованность результатов
+                    if (rowValue !== null && colValue !== null) {
+                        if (rowValue === colValue) {
+                            // Оба анализа дают одинаковый результат - это точно гарантированная клетка!
+                            changes.push({
+                                row: i,
+                                col: j,
+                                value: rowValue,
+                                reason: `Подтверждено и строкой ${i + 1}, и столбцом ${j + 1}`,
+                                foundByRow: true,
+                                foundByCol: true
+                            });
+                        }
+                        // Если результаты противоречат друг другу, не добавляем изменение
+                    } else if (rowValue !== null) {
+                        // Только строка дает результат
+                        changes.push({
+                            row: i,
+                            col: j,
+                            value: rowValue,
+                            reason: `Анализ строки ${i + 1}`,
+                            foundByRow: true,
+                            foundByCol: false
+                        });
+                    } else if (colValue !== null) {
+                        // Только столбец дает результат
+                        changes.push({
+                            row: i,
+                            col: j,
+                            value: colValue,
+                            reason: `Анализ столбца ${j + 1}`,
+                            foundByRow: false,
+                            foundByCol: true
+                        });
+                    }
+                }
+            }
+            
+            // Фильтруем изменения, убираем те, которые противоречат другим линиям
+            const validChanges = [];
+            for (const change of changes) {
+                let isValid = true;
+                
+                // Проверяем, не противоречит ли это изменение подсказкам столбца
+                if (change.foundByRow && !change.foundByCol) {
+                    const colHints = topHints[change.col];
+                    if (colHints.length === 0 && change.value === 1) {
+                        // Пытаемся закрасить клетку в столбце без подсказок
+                        isValid = false;
+                    } else if (colHints.length > 0) {
+                        // Создаем временный столбец с этим изменением
+                        const tempColumn = [];
+                        for (let i = 0; i < height; i++) {
+                            if (i === change.row) {
+                                tempColumn.push(change.value);
+                            } else {
+                                tempColumn.push(grid[i][change.col]);
+                            }
+                        }
+                        
+                        // Проверяем, возможно ли такое размещение
+                        const placements = generateValidPlacements(tempColumn, colHints, height);
+                        if (placements.length === 0) {
+                            isValid = false;
+                        }
+                    }
+                }
+                
+                // Аналогично проверяем для столбцов
+                if (change.foundByCol && !change.foundByRow) {
+                    const rowHints = leftHints[change.row];
+                    if (rowHints.length === 0 && change.value === 1) {
+                        isValid = false;
+                    } else if (rowHints.length > 0) {
+                        const tempRow = [...grid[change.row]];
+                        tempRow[change.col] = change.value;
+                        
+                        const placements = generateValidPlacements(tempRow, rowHints, width);
+                        if (placements.length === 0) {
+                            isValid = false;
+                        }
+                    }
+                }
+                
+                if (isValid) {
+                    validChanges.push(change);
+                }
+            }
+            
+            return validChanges;
+        }
+        
+        function calculateProgress() {
+            let totalHints = 0;
+            let satisfiedHints = 0;
+            
+            // Проверяем строки
+            for (let i = 0; i < height; i++) {
+                const hints = leftHints[i];
+                if (hints.length > 0) {
+                    totalHints++;
+                    if (isLineSatisfied(grid[i], hints)) {
+                        satisfiedHints++;
+                    }
+                }
+            }
+            
+            // Проверяем столбцы
+            for (let j = 0; j < width; j++) {
+                const hints = topHints[j];
+                if (hints.length > 0) {
+                    totalHints++;
+                    const column = [];
+                    for (let i = 0; i < height; i++) {
+                        column.push(grid[i][j]);
+                    }
+                    if (isLineSatisfied(column, hints)) {
+                        satisfiedHints++;
+                    }
+                }
+            }
+            
+            return totalHints > 0 ? Math.round((satisfiedHints / totalHints) * 100) : 0;
+        }
+        
+        function isLineSatisfied(line, hints) {
+            const groups = [];
+            let currentGroup = 0;
+            
+            for (let i = 0; i < line.length; i++) {
+                if (line[i] === 1) {
+                    currentGroup++;
+                } else if (currentGroup > 0) {
+                    groups.push(currentGroup);
+                    currentGroup = 0;
+                }
+            }
+            if (currentGroup > 0) {
+                groups.push(currentGroup);
+            }
+            
+            return JSON.stringify(groups) === JSON.stringify(hints);
+        }
+        
+        function showSolverInfo(message, progress) {
+            const info = document.getElementById('solverInfo');
+            const messageEl = document.getElementById('solverMessage');
+            
+            info.style.display = 'block';
+            messageEl.textContent = message;
+            updateProgress(progress);
+        }
+        
+        function hideSolverInfo() {
+            document.getElementById('solverInfo').style.display = 'none';
+        }
+        
+        function updateProgress(percent) {
+            document.getElementById('progressFill').style.width = percent + '%';
+        }
+
+        function analyzeLine(line, hints, lineLength) {
+            if (hints.length === 0) {
+                // Если нет подсказок, все клетки должны быть крестиками
+                return Array(lineLength).fill(-1);
+            }
+            
+            const result = Array(lineLength).fill(null);
+            
+            // 1. Simple Box - полное заполнение
+            const minLength = hints.reduce((sum, h) => sum + h, 0) + hints.length - 1;
+            if (minLength === lineLength) {
+                let pos = 0;
+                for (let i = 0; i < hints.length; i++) {
+                    if (i > 0) {
+                        result[pos++] = -1;
+                    }
+                    for (let j = 0; j < hints[i]; j++) {
+                        result[pos++] = 1;
+                    }
+                }
+                return result;
+            }
+            
+            // 2. Простой алгоритм перекрытий для каждой группы
+            let currentPos = 0;
+            for (let hintIdx = 0; hintIdx < hints.length; hintIdx++) {
+                const hintSize = hints[hintIdx];
+                
+                // Вычисляем минимальное пространство слева
+                const spaceLeft = hints.slice(0, hintIdx).reduce((sum, h) => sum + h + 1, 0);
+                
+                // Вычисляем минимальное пространство справа
+                const spaceRight = hints.slice(hintIdx + 1).reduce((sum, h) => sum + h + 1, 0);
+                
+                // Крайние возможные позиции для этой группы
+                const leftmostStart = spaceLeft;
+                const rightmostStart = lineLength - spaceRight - hintSize;
+                
+                // Проверяем, есть ли перекрытие
+                if (leftmostStart <= rightmostStart) {
+                    // Перекрытие существует от конца самого правого начала до начала самого левого конца
+                    const overlapStart = rightmostStart;
+                    const overlapEnd = leftmostStart + hintSize;
+                    
+                    // Закрашиваем только область перекрытия
+                    for (let i = overlapStart; i < overlapEnd && i < lineLength; i++) {
+                        if (i >= 0) {
+                            result[i] = 1;
+                        }
+                    }
+                }
+            }
+            
+            // 3. Проверяем уже заполненные клетки и применяем дополнительную логику
+            const segments = findFilledSegments(line);
+            
+            // Если есть заполненные сегменты, пробуем их сопоставить с подсказками
+            if (segments.length > 0) {
+                // Применяем более сложную логику с учетом существующих заполнений
+                const validPlacements = generateValidPlacements(line, hints, lineLength);
+                
+                if (validPlacements.length === 0) {
+                    // Нет валидных размещений - что-то не так
+                    return null;
+                }
+                
+                // Находим общие клетки во всех валидных размещениях
+                for (let i = 0; i < lineLength; i++) {
+                    const firstValue = validPlacements[0][i];
+                    if (validPlacements.every(p => p[i] === firstValue)) {
+                        result[i] = firstValue;
+                    }
+                }
+            }
+            
+            // 4. Применяем дополнительные правила
+            applySimpleRules(line, hints, result, lineLength);
+            
+            return result;
+        }
+        
+        function findFilledSegments(line) {
+            const segments = [];
+            let start = -1;
+            
+            for (let i = 0; i < line.length; i++) {
+                if (line[i] === 1) {
+                    if (start === -1) start = i;
+                } else if (start !== -1) {
+                    segments.push({ start, end: i - 1, length: i - start });
+                    start = -1;
+                }
+            }
+            if (start !== -1) {
+                segments.push({ start, end: line.length - 1, length: line.length - start });
+            }
+            
+            return segments;
+        }
+        
+        function applySimpleRules(line, hints, result, lineLength) {
+            // Правило 1: Если есть крестик, соседние клетки от заполненных тоже крестики
+            for (let i = 0; i < lineLength; i++) {
+                if (line[i] === 1 || result[i] === 1) {
+                    // Проверяем соседей
+                    if (i > 0 && (line[i-1] === -1 || result[i-1] === -1)) {
+                        // Слева крестик, значит это начало группы
+                        let groupEnd = i;
+                        while (groupEnd < lineLength && (line[groupEnd] === 1 || result[groupEnd] === 1)) {
+                            groupEnd++;
+                        }
+                        
+                        // Проверяем, может ли эта группа расшириться
+                        const groupLength = groupEnd - i;
+                        const canExtend = hints.some(h => h > groupLength);
+                        
+                        if (!canExtend && groupEnd < lineLength) {
+                            result[groupEnd] = -1;
+                        }
+                    }
+                }
+            }
+            
+            // Правило 2: Промежутки, которые слишком малы для любой подсказки
+            const minHint = Math.min(...hints);
+            let gapStart = -1;
+            
+            for (let i = 0; i <= lineLength; i++) {
+                const isCross = i === lineLength || line[i] === -1 || result[i] === -1;
+                
+                if (isCross) {
+                    if (gapStart !== -1) {
+                        const gapSize = i - gapStart;
+                        if (gapSize < minHint) {
+                            // Заполняем весь промежуток крестиками
+                            for (let j = gapStart; j < i; j++) {
+                                if (line[j] === 0) {
+                                    result[j] = -1;
+                                }
+                            }
+                        }
+                    }
+                    gapStart = i + 1;
+                } else if (line[i] === 1 || result[i] === 1) {
+                    gapStart = -1;
+                }
+            }
+            
+            // Правило 3: Если все подсказки "использованы"
+            const filledGroups = [];
+            let inGroup = false;
+            let groupSize = 0;
+            
+            for (let i = 0; i < lineLength; i++) {
+                if (line[i] === 1) {
+                    if (!inGroup) {
+                        inGroup = true;
+                        groupSize = 1;
+                    } else {
+                        groupSize++;
+                    }
+                } else if (inGroup) {
+                    filledGroups.push(groupSize);
+                    inGroup = false;
+                    groupSize = 0;
+                }
+            }
+            if (inGroup) {
+                filledGroups.push(groupSize);
+            }
+            
+            // Если количество групп равно количеству подсказок
+            if (filledGroups.length === hints.length) {
+                // Проверяем, совпадают ли размеры
+                let allMatch = true;
+                for (let i = 0; i < hints.length; i++) {
+                    if (filledGroups[i] !== hints[i]) {
+                        allMatch = false;
+                        break;
+                    }
+                }
+                
+                if (allMatch) {
+                    // Все группы найдены, остальные клетки - крестики
+                    for (let i = 0; i < lineLength; i++) {
+                        if (line[i] === 0 && result[i] === null) {
+                            result[i] = -1;
+                        }
+                    }
+                }
+            }
+        }
+        
+        function generateValidPlacements(line, hints, lineLength) {
+            const placements = [];
+            
+            function generate(hintIndex, position, current) {
+                if (hintIndex === hints.length) {
+                    // Проверяем, что все оставшиеся позиции могут быть пустыми
+                    const placement = [...current];
+                    for (let i = position; i < lineLength; i++) {
+                        if (line[i] === 1) return; // Конфликт - есть закрашенная клетка вне групп
+                        placement[i] = -1;
+                    }
+                    
+                    // Проверяем соответствие существующим клеткам
+                    for (let i = 0; i < lineLength; i++) {
+                        if (line[i] !== 0 && line[i] !== placement[i]) return;
+                    }
+                    
+                    placements.push(placement);
+                    return;
+                }
+                
+                const hintSize = hints[hintIndex];
+                const remainingHints = hints.slice(hintIndex + 1);
+                const minRemainingSpace = remainingHints.reduce((sum, h) => sum + h + 1, 0);
+                const maxPosition = lineLength - hintSize - minRemainingSpace;
+                
+                for (let start = position; start <= maxPosition; start++) {
+                    // Проверяем, можем ли разместить группу здесь
+                    let canPlace = true;
+                    
+                    // Проверка на крестики в группе
+                    for (let i = start; i < start + hintSize; i++) {
+                        if (line[i] === -1) {
+                            canPlace = false;
+                            break;
+                        }
+                    }
+                    
+                    // Проверка на заполненную клетку перед группой
+                    if (start > 0 && line[start - 1] === 1) canPlace = false;
+                    
+                    // Проверка на заполненную клетку после группы
+                    if (start + hintSize < lineLength && line[start + hintSize] === 1) canPlace = false;
+                    
+                    if (!canPlace) continue;
+                    
+                    // Создаем новое размещение
+                    const newPlacement = [...current];
+                    
+                    // Добавляем крестики перед группой
+                    for (let i = position; i < start; i++) {
+                        newPlacement[i] = -1;
+                    }
+                    
+                    // Добавляем группу
+                    for (let i = start; i < start + hintSize; i++) {
+                        newPlacement[i] = 1;
+                    }
+                    
+                    // Добавляем крестик после группы (если не последняя)
+                    if (hintIndex < hints.length - 1 && start + hintSize < lineLength) {
+                        newPlacement[start + hintSize] = -1;
+                        generate(hintIndex + 1, start + hintSize + 1, newPlacement);
+                    } else {
+                        generate(hintIndex + 1, start + hintSize, newPlacement);
+                    }
+                }
+            }
+            
+            generate(0, 0, Array(lineLength).fill(0));
+            return placements;
+        }
+
+        function clearGrid() {
+            grid = Array(height).fill().map(() => Array(width).fill(0));
+            document.querySelectorAll('.game-cell').forEach(cell => {
+                cell.classList.remove('filled', 'crossed');
+                cell.style.background = '';
+            });
+            updateStats();
+        }
+
+        function updateStats() {
+            let filled = 0;
+            let crossed = 0;
+            
+            for (let i = 0; i < height; i++) {
+                for (let j = 0; j < width; j++) {
+                    if (grid[i][j] === 1) filled++;
+                    if (grid[i][j] === -1) crossed++;
+                }
+            }
+            
+            document.getElementById('statsInfo').innerHTML = 
+                `Закрашено: ${filled} | Крестиков: ${crossed} | Всего клеток: ${width * height}`;
+        }
+
+        // Инициализация при загрузке
+        createGrid();
+    </script>
+</body>
+</html>
