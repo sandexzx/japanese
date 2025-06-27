@@ -140,31 +140,7 @@
         .crossed::after {
             transform: translate(-50%, -50%) rotate(-45deg);
         }
-
-        .highlight-row {
-            background: #f39c12 !important;
-            opacity: 0.3;
-        }
-
-        .hint-possible {
-            background: #e67e22 !important;
-            animation: pulse 1s infinite;
-        }
-
-        @keyframes pulse {
-            0% { opacity: 0.6; }
-            50% { opacity: 1; }
-            100% { opacity: 0.6; }
-        }
-
-        .stats {
-            margin-top: 20px;
-            padding: 15px;
-            background: #16213e;
-            border-radius: 10px;
-            text-align: center;
-        }
-
+        
         .highlight-guaranteed-fill {
             animation: pulse-green 2s;
             background: #f1c40f !important;
@@ -197,6 +173,7 @@
             max-width: 300px;
             display: none;
             box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            z-index: 100;
         }
         
         .solver-info h3 {
@@ -229,7 +206,6 @@
         <label>Высота:</label>
         <input type="number" id="height" value="10" min="5" max="30">
         <button onclick="createGrid()">Создать поле</button>
-        <button onclick="checkPossibleLines()">Проверить линии</button>
         <button onclick="showHints()">🔍 Подсказка</button>
         <button onclick="solveStep()">📐 Шаг решения</button>
         <button onclick="solveFull()">🚀 Решить полностью</button>
@@ -249,7 +225,7 @@
     <div class="stats">
         <div id="statsInfo"></div>
         <div class="legend">
-            ЛКМ - закрасить | ПКМ - крестик | Стрелки - навигация по подсказкам | Оранжевые строки - можно что-то заполнить
+            ЛКМ - закрасить | ПКМ - крестик | Стрелки - навигация по подсказкам
         </div>
     </div>
 
@@ -260,6 +236,7 @@
         let width = 10;
         let height = 10;
         let currentFocusedInput = null;
+        let isSolving = false;
 
         function createGrid() {
             width = parseInt(document.getElementById('width').value);
@@ -268,29 +245,17 @@
             const container = document.getElementById('gameContainer');
             container.innerHTML = '';
             
-            // Инициализация массивов
-            grid = Array(height).fill().map(() => Array(width).fill(0));
+            grid = Array(height).fill().map(() => Array(width).fill(0)); // 0: empty, 1: filled, -1: crossed
             topHints = Array(width).fill().map(() => []);
             leftHints = Array(height).fill().map(() => []);
             
-            // Создание таблицы
             const table = document.createElement('table');
-            
-            // Определяем максимальное количество подсказок
             const maxTopHints = Math.ceil(height / 2);
             const maxLeftHints = Math.ceil(width / 2);
             
-            // Создаем строки для верхних подсказок
             for (let i = 0; i < maxTopHints; i++) {
                 const row = table.insertRow();
-                
-                // Пустые ячейки слева
-                for (let j = 0; j < maxLeftHints; j++) {
-                    const cell = row.insertCell();
-                    cell.className = 'hint-cell';
-                }
-                
-                // Ячейки для подсказок столбцов
+                for (let j = 0; j < maxLeftHints; j++) row.insertCell().className = 'hint-cell';
                 for (let j = 0; j < width; j++) {
                     const cell = row.insertCell();
                     cell.className = 'hint-cell';
@@ -305,11 +270,8 @@
                 }
             }
             
-            // Создаем игровое поле
             for (let i = 0; i < height; i++) {
                 const row = table.insertRow();
-                
-                // Ячейки для левых подсказок
                 for (let j = 0; j < maxLeftHints; j++) {
                     const cell = row.insertCell();
                     cell.className = 'hint-cell';
@@ -322,8 +284,6 @@
                     input.onkeydown = handleHintKeyDown;
                     cell.appendChild(input);
                 }
-                
-                // Игровые ячейки
                 for (let j = 0; j < width; j++) {
                     const cell = row.insertCell();
                     cell.className = 'game-cell';
@@ -337,54 +297,37 @@
             container.appendChild(table);
             updateStats();
         }
+        
+        function parseHints(value) {
+            return value.split(/[\s,]+/).map(n => parseInt(n)).filter(n => !isNaN(n) && n > 0);
+        }
 
         function updateTopHint(e) {
             const col = parseInt(e.target.dataset.col);
-            const hintRow = parseInt(e.target.dataset.hintRow);
-            const value = e.target.value.trim();
-            
-            if (!topHints[col]) topHints[col] = [];
-            
-            if (value) {
-                topHints[col][hintRow] = parseInt(value);
-            } else {
-                topHints[col][hintRow] = null;
-            }
-            
-            // Убираем null значения
-            topHints[col] = topHints[col].filter(h => h !== null);
+            topHints[col] = parseHints(e.target.value);
+            // Для удобства заполнения, объединяем все инпуты в один массив
+            let allInputs = [];
+             document.querySelectorAll(`input[data-col="${col}"]`).forEach(input => {
+                allInputs = [...allInputs, ...parseHints(input.value)];
+            });
+            topHints[col] = allInputs;
         }
 
         function updateLeftHint(e) {
             const row = parseInt(e.target.dataset.row);
-            const hintCol = parseInt(e.target.dataset.hintCol);
-            const value = e.target.value.trim();
-            
-            if (!leftHints[row]) leftHints[row] = [];
-            
-            if (value) {
-                leftHints[row][hintCol] = parseInt(value);
-            } else {
-                leftHints[row][hintCol] = null;
-            }
-            
-            // Убираем null значения
-            leftHints[row] = leftHints[row].filter(h => h !== null);
+             let allInputs = [];
+             document.querySelectorAll(`input[data-row="${row}"]`).forEach(input => {
+                allInputs = [...allInputs, ...parseHints(input.value)];
+            });
+            leftHints[row] = allInputs;
         }
 
         function handleCellClick(e) {
             const row = parseInt(e.target.dataset.row);
             const col = parseInt(e.target.dataset.col);
             
-            if (grid[row][col] === 1) {
-                grid[row][col] = 0;
-                e.target.classList.remove('filled');
-            } else {
-                grid[row][col] = 1;
-                e.target.classList.add('filled');
-                e.target.classList.remove('crossed');
-            }
-            
+            grid[row][col] = grid[row][col] === 1 ? 0 : 1;
+            updateCell(row, col);
             updateStats();
         }
 
@@ -393,55 +336,16 @@
             const row = parseInt(e.target.dataset.row);
             const col = parseInt(e.target.dataset.col);
             
-            if (e.target.classList.contains('crossed')) {
-                grid[row][col] = 0;
-                e.target.classList.remove('crossed');
-            } else {
-                grid[row][col] = -1;
-                e.target.classList.add('crossed');
-                e.target.classList.remove('filled');
-            }
-            
+            grid[row][col] = grid[row][col] === -1 ? 0 : -1;
+            updateCell(row, col);
             updateStats();
         }
 
-        function checkPossibleLines() {
-            // Сбрасываем подсветку
-            document.querySelectorAll('.hint-cell').forEach(cell => {
-                cell.classList.remove('hint-possible');
-            });
-            
-            // Проверяем строки
-            for (let i = 0; i < height; i++) {
-                const hints = leftHints[i];
-                if (hints.length > 0) {
-                    const minFilled = hints.reduce((sum, h) => sum + h, 0) + hints.length - 1;
-                    const maxHint = Math.max(...hints);
-                    
-                    if (minFilled > width / 2 || maxHint > width / 2) {
-                        // Подсвечиваем ячейки подсказок этой строки
-                        document.querySelectorAll(`input[data-row="${i}"]`).forEach(input => {
-                            input.parentElement.classList.add('hint-possible');
-                        });
-                    }
-                }
-            }
-            
-            // Проверяем столбцы
-            for (let j = 0; j < width; j++) {
-                const hints = topHints[j];
-                if (hints.length > 0) {
-                    const minFilled = hints.reduce((sum, h) => sum + h, 0) + hints.length - 1;
-                    const maxHint = Math.max(...hints);
-                    
-                    if (minFilled > height / 2 || maxHint > height / 2) {
-                        // Подсвечиваем ячейки подсказок этого столбца
-                        document.querySelectorAll(`input[data-col="${j}"]`).forEach(input => {
-                            input.parentElement.classList.add('hint-possible');
-                        });
-                    }
-                }
-            }
+        function updateCell(row, col) {
+            const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+            cell.classList.remove('filled', 'crossed');
+            if (grid[row][col] === 1) cell.classList.add('filled');
+            else if (grid[row][col] === -1) cell.classList.add('crossed');
         }
 
         function showHints() {
@@ -449,22 +353,17 @@
             
             if (changes.length === 0) {
                 showSolverInfo('Нет очевидных ходов! Попробуй логику 🧠', calculateProgress());
-                setTimeout(() => hideSolverInfo(), 2000);
+                setTimeout(hideSolverInfo, 2000);
                 return;
             }
             
-            // Группируем изменения по типу для лучшего описания
             const fillCount = changes.filter(c => c.value === 1).length;
             const crossCount = changes.filter(c => c.value === -1).length;
             
-            // Подсвечиваем найденные клетки
             changes.forEach(change => {
                 const cell = document.querySelector(`[data-row="${change.row}"][data-col="${change.col}"]`);
-                if (change.value === 1) {
-                    cell.classList.add('highlight-guaranteed-fill');
-                } else if (change.value === -1) {
-                    cell.classList.add('highlight-guaranteed-cross');
-                }
+                if (change.value === 1) cell.classList.add('highlight-guaranteed-fill');
+                else if (change.value === -1) cell.classList.add('highlight-guaranteed-cross');
             });
             
             let message = `Найдено: `;
@@ -474,7 +373,6 @@
             
             showSolverInfo(message, calculateProgress());
             
-            // Убираем подсветку через 2 секунды
             setTimeout(() => {
                 document.querySelectorAll('.highlight-guaranteed-fill, .highlight-guaranteed-cross').forEach(cell => {
                     cell.classList.remove('highlight-guaranteed-fill', 'highlight-guaranteed-cross');
@@ -488,262 +386,224 @@
             
             if (changes.length === 0) {
                 showSolverInfo('Больше нет очевидных ходов! 🤔', calculateProgress());
-                setTimeout(() => hideSolverInfo(), 2000);
+                setTimeout(hideSolverInfo, 2000);
                 return false;
             }
             
-            // Сортируем изменения по приоритету (сначала те, которые подтверждены и строкой, и столбцом)
-            changes.sort((a, b) => {
-                // Приоритет отдаем тем клеткам, которые найдены обоими способами
-                const aScore = (a.foundByRow ? 1 : 0) + (a.foundByCol ? 1 : 0);
-                const bScore = (b.foundByRow ? 1 : 0) + (b.foundByCol ? 1 : 0);
-                return bScore - aScore;
+            // Применим все гарантированные изменения за один шаг
+            changes.forEach(change => {
+                grid[change.row][change.col] = change.value;
+                updateCell(change.row, change.col);
             });
             
-            // Применяем первое найденное изменение
-            const change = changes[0];
-            grid[change.row][change.col] = change.value;
-            
-            const cell = document.querySelector(`[data-row="${change.row}"][data-col="${change.col}"]`);
-            if (change.value === 1) {
-                cell.classList.add('filled');
-                cell.classList.remove('crossed');
-                showSolverInfo(`Закрашиваю клетку [${change.row + 1}, ${change.col + 1}] по правилу: ${change.reason}`, calculateProgress());
-            } else if (change.value === -1) {
-                cell.classList.add('crossed');
-                cell.classList.remove('filled');
-                showSolverInfo(`Ставлю крестик в [${change.row + 1}, ${change.col + 1}] по правилу: ${change.reason}`, calculateProgress());
-            }
-            
+            const fillCount = changes.filter(c => c.value === 1).length;
+            const crossCount = changes.filter(c => c.value === -1).length;
+            showSolverInfo(`Применено ${fillCount} закрашиваний и ${crossCount} крестиков.`, calculateProgress());
+
             updateStats();
-            
-            setTimeout(() => hideSolverInfo(), 3000);
             return true;
         }
         
-        function solveFull() {
+        async function solveFull() {
+            if(isSolving) return;
+            isSolving = true;
+            
+            showSolverInfo('Начинаю автоматическое решение... 🚀', calculateProgress());
+            
+            let changedInLoop = true;
             let steps = 0;
-            let solving = true;
-            
-            showSolverInfo('Начинаю автоматическое решение... 🚀', 0);
-            
-            function solveNextStep() {
-                if (!solving) return;
-                
-                if (solveStep()) {
+            while(changedInLoop && isSolving) {
+                const changes = findGuaranteedCells();
+                if (changes.length > 0) {
+                    changes.forEach(change => {
+                        grid[change.row][change.col] = change.value;
+                        updateCell(change.row, change.col);
+                    });
                     steps++;
-                    const progress = calculateProgress();
-                    updateProgress(progress);
-                    
-                    // Делаем паузу между шагами для визуализации
-                    setTimeout(solveNextStep, 100);
+                    updateProgress(calculateProgress());
+                    updateStats();
+                    // Даем браузеру отрисовать изменения
+                    await new Promise(resolve => setTimeout(resolve, 50)); 
                 } else {
-                    solving = false;
-                    const progress = calculateProgress();
-                    
-                    if (progress === 100) {
-                        showSolverInfo(`Решено за ${steps} шагов! 🎉`, 100);
-                    } else {
-                        showSolverInfo(`Сделано ${steps} шагов. Дальше нужна продвинутая логика! 🧩`, progress);
-                    }
-                    
-                    setTimeout(() => hideSolverInfo(), 3000);
+                    changedInLoop = false;
                 }
             }
             
-            solveNextStep();
+            isSolving = false;
+            const progress = calculateProgress();
+            if (progress === 100) {
+                showSolverInfo(`Решено за ${steps} итераций! 🎉`, 100);
+            } else {
+                showSolverInfo(`Сделано ${steps} итераций. Дальше нужна продвинутая логика или гадание.`, progress);
+            }
+            setTimeout(hideSolverInfo, 4000);
         }
         
+        // =================================================================================
+        // ======================= 🔥 НОВЫЙ СУПЕР-ДВИЖОК РЕШЕНИЯ 🔥 =======================
+        // =================================================================================
+
+        /**
+         * Главная функция-анализатор. Находит все гарантированные ходы для всех линий.
+         */
         function findGuaranteedCells() {
-            const changes = [];
-            const rowResults = [];
-            const colResults = [];
-            
-            // Анализируем все строки
-            for (let i = 0; i < height; i++) {
-                const hints = leftHints[i];
-                if (hints.length === 0) {
-                    // Если нет подсказок, вся строка должна быть крестиками
-                    rowResults[i] = Array(width).fill(-1);
-                } else {
-                    rowResults[i] = analyzeLine(grid[i], hints, width);
-                }
-            }
-            
-            // Анализируем все столбцы
-            for (let j = 0; j < width; j++) {
-                const hints = topHints[j];
-                const column = [];
-                for (let i = 0; i < height; i++) {
-                    column.push(grid[i][j]);
-                }
+            const changes = new Map(); // Используем Map, чтобы избежать дубликатов клеток
+
+            const processLine = (isRow, index) => {
+                const line = isRow ? grid[index] : grid.map(row => row[index]);
+                const hints = isRow ? leftHints[index] : topHints[index];
                 
-                if (hints.length === 0) {
-                    // Если нет подсказок, весь столбец должен быть крестиками
-                    colResults[j] = Array(height).fill(-1);
-                } else {
-                    colResults[j] = analyzeLine(column, hints, height);
-                }
-            }
-            
-            // Находим клетки, которые гарантированы с обеих сторон
-            for (let i = 0; i < height; i++) {
-                for (let j = 0; j < width; j++) {
-                    if (grid[i][j] !== 0) continue; // Уже заполнена
-                    
-                    const rowValue = rowResults[i] ? rowResults[i][j] : null;
-                    const colValue = colResults[j] ? colResults[j][i] : null;
-                    
-                    // Проверяем согласованность результатов
-                    if (rowValue !== null && colValue !== null) {
-                        if (rowValue === colValue) {
-                            // Оба анализа дают одинаковый результат - это точно гарантированная клетка!
-                            changes.push({
-                                row: i,
-                                col: j,
-                                value: rowValue,
-                                reason: `Подтверждено и строкой ${i + 1}, и столбцом ${j + 1}`,
-                                foundByRow: true,
-                                foundByCol: true
-                            });
+                // Если подсказок нет или они пустые, все неизвестные клетки - крестики
+                if (!hints || hints.length === 0 || (hints.length === 1 && hints[0] === 0)) {
+                    for (let i = 0; i < line.length; i++) {
+                        if (line[i] === 0) {
+                             const row = isRow ? index : i;
+                             const col = isRow ? i : index;
+                             changes.set(`${row}-${col}`, { row, col, value: -1, reason: `Нет подсказок` });
                         }
-                        // Если результаты противоречат друг другу, не добавляем изменение
-                    } else if (rowValue !== null) {
-                        // Только строка дает результат
-                        changes.push({
-                            row: i,
-                            col: j,
-                            value: rowValue,
-                            reason: `Анализ строки ${i + 1}`,
-                            foundByRow: true,
-                            foundByCol: false
-                        });
-                    } else if (colValue !== null) {
-                        // Только столбец дает результат
-                        changes.push({
-                            row: i,
-                            col: j,
-                            value: colValue,
-                            reason: `Анализ столбца ${j + 1}`,
-                            foundByRow: false,
-                            foundByCol: true
-                        });
                     }
+                    return;
                 }
-            }
-            
-            // Фильтруем изменения, убираем те, которые противоречат другим линиям
-            const validChanges = [];
-            for (const change of changes) {
-                let isValid = true;
                 
-                // Проверяем, не противоречит ли это изменение подсказкам столбца
-                if (change.foundByRow && !change.foundByCol) {
-                    const colHints = topHints[change.col];
-                    if (colHints.length === 0 && change.value === 1) {
-                        // Пытаемся закрасить клетку в столбце без подсказок
-                        isValid = false;
-                    } else if (colHints.length > 0) {
-                        // Создаем временный столбец с этим изменением
-                        const tempColumn = [];
-                        for (let i = 0; i < height; i++) {
-                            if (i === change.row) {
-                                tempColumn.push(change.value);
-                            } else {
-                                tempColumn.push(grid[i][change.col]);
+                // Если линия уже полностью и правильно заполнена, пропускаем
+                if(isLineSolved(line, hints)) return;
+
+                const newInfo = analyzeLine(line, hints);
+
+                if (newInfo) {
+                    newInfo.forEach((value, i) => {
+                        if (value !== 0) { // 0 означает, что мы ничего нового не узнали
+                            const row = isRow ? index : i;
+                            const col = isRow ? i : index;
+                            // Добавляем только если клетка была пустой
+                            if (grid[row][col] === 0) {
+                                changes.set(`${row}-${col}`, { row, col, value, reason: `Анализ ${isRow ? 'строки' : 'столбца'} ${index + 1}` });
                             }
                         }
-                        
-                        // Проверяем, возможно ли такое размещение
-                        const placements = generateValidPlacements(tempColumn, colHints, height);
-                        if (placements.length === 0) {
-                            isValid = false;
+                    });
+                }
+            };
+            
+            // Сначала анализируем строки, потом столбцы. Можно повторять для большей точности.
+            for (let i = 0; i < height; i++) processLine(true, i);
+            for (let j = 0; j < width; j++) processLine(false, j);
+
+            return Array.from(changes.values());
+        }
+
+        /**
+         * Анализирует одну линию (строку или столбец) на основе самого мощного метода:
+         * 1. Генерирует ВСЕ возможные варианты расстановки блоков.
+         * 2. Учитывает уже заполненные клетки (1) и крестики (-1).
+         * 3. Находит пересечения: если клетка во ВСЕХ вариантах закрашена, она 100% закрашена.
+         * Если во ВСЕХ вариантах пуста - она 100% пуста (крестик).
+         */
+        function analyzeLine(line, hints) {
+            const lineLength = line.length;
+            const placements = [];
+            
+            // Рекурсивная функция для генерации всех возможных расстановок
+            function generate(hintIndex, startPos, currentPlacement) {
+                // Базовый случай: все подсказки расставлены
+                if (hintIndex === hints.length) {
+                    const finalPlacement = [...currentPlacement];
+                    // Заполняем оставшееся пространство крестиками
+                    for (let i = startPos; i < lineLength; i++) {
+                        finalPlacement[i] = -1;
+                    }
+
+                    // Валидация: проверяем, не противоречит ли наш вариант уже известным клеткам
+                    for (let i = 0; i < lineLength; i++) {
+                        if (line[i] !== 0 && line[i] !== finalPlacement[i]) {
+                            return; // Конфликт, отбрасываем этот вариант
                         }
                     }
+                    placements.push(finalPlacement);
+                    return;
                 }
+
+                const hintSize = hints[hintIndex];
+                const remainingHints = hints.slice(hintIndex + 1);
+                const spaceForRemaining = remainingHints.reduce((a, b) => a + b, 0) + remainingHints.length;
                 
-                // Аналогично проверяем для столбцов
-                if (change.foundByCol && !change.foundByRow) {
-                    const rowHints = leftHints[change.row];
-                    if (rowHints.length === 0 && change.value === 1) {
-                        isValid = false;
-                    } else if (rowHints.length > 0) {
-                        const tempRow = [...grid[change.row]];
-                        tempRow[change.col] = change.value;
-                        
-                        const placements = generateValidPlacements(tempRow, rowHints, width);
-                        if (placements.length === 0) {
-                            isValid = false;
-                        }
+                const endPos = lineLength - spaceForRemaining - hintSize;
+
+                // Идем по всем возможным позициям для текущей группы
+                for (let pos = startPos; pos <= endPos; pos++) {
+                    const newPlacement = [...currentPlacement];
+                    
+                    // Заполняем пробелы до группы
+                    for (let i = startPos; i < pos; i++) newPlacement[i] = -1;
+
+                    // Размещаем саму группу
+                    for (let i = 0; i < hintSize; i++) newPlacement[pos + i] = 1;
+                    
+                    // Добавляем разделительный крестик после группы
+                    if (pos + hintSize < lineLength) {
+                        newPlacement[pos + hintSize] = -1;
                     }
-                }
-                
-                if (isValid) {
-                    validChanges.push(change);
+
+                    // Рекурсивный вызов для следующей группы
+                    generate(hintIndex + 1, pos + hintSize + 1, newPlacement);
                 }
             }
-            
-            return validChanges;
+
+            generate(0, 0, Array(lineLength).fill(0));
+
+            if (placements.length === 0) {
+                return null; // Нет валидных расстановок, что-то не так
+            }
+
+            // Ищем пересечения во всех валидных расстановках
+            const result = Array(lineLength).fill(0); // 0 = неизвестно
+            for (let i = 0; i < lineLength; i++) {
+                const firstVal = placements[0][i];
+                if (placements.every(p => p[i] === firstVal)) {
+                    result[i] = firstVal;
+                }
+            }
+            return result;
         }
-        
+
+        // =================================================================================
+        // ======================= КОНЕЦ НОВОГО ДВИЖКА =====================================
+        // =================================================================================
+
         function calculateProgress() {
-            let totalHints = 0;
-            let satisfiedHints = 0;
+            let totalLines = 0;
+            let satisfiedLines = 0;
             
-            // Проверяем строки
             for (let i = 0; i < height; i++) {
-                const hints = leftHints[i];
-                if (hints.length > 0) {
-                    totalHints++;
-                    if (isLineSatisfied(grid[i], hints)) {
-                        satisfiedHints++;
-                    }
+                if (leftHints[i] && leftHints[i].length > 0) {
+                    totalLines++;
+                    if (isLineSolved(grid[i], leftHints[i])) satisfiedLines++;
                 }
             }
-            
-            // Проверяем столбцы
             for (let j = 0; j < width; j++) {
-                const hints = topHints[j];
-                if (hints.length > 0) {
-                    totalHints++;
-                    const column = [];
-                    for (let i = 0; i < height; i++) {
-                        column.push(grid[i][j]);
-                    }
-                    if (isLineSatisfied(column, hints)) {
-                        satisfiedHints++;
-                    }
+                if (topHints[j] && topHints[j].length > 0) {
+                    totalLines++;
+                    const column = grid.map(row => row[j]);
+                    if (isLineSolved(column, topHints[j])) satisfiedLines++;
                 }
             }
-            
-            return totalHints > 0 ? Math.round((satisfiedHints / totalHints) * 100) : 0;
+            return totalLines > 0 ? Math.round((satisfiedLines / totalLines) * 100) : (isGridEmpty() ? 0 : 100);
         }
         
-        function isLineSatisfied(line, hints) {
-            const groups = [];
-            let currentGroup = 0;
+        function isGridEmpty() {
+            return grid.every(row => row.every(cell => cell === 0));
+        }
+
+        function isLineSolved(line, hints) {
+            // Линия считается решенной, если в ней нет неизвестных клеток (0) и она соответствует подсказкам
+            if (line.includes(0)) return false; 
             
-            for (let i = 0; i < line.length; i++) {
-                if (line[i] === 1) {
-                    currentGroup++;
-                } else if (currentGroup > 0) {
-                    groups.push(currentGroup);
-                    currentGroup = 0;
-                }
-            }
-            if (currentGroup > 0) {
-                groups.push(currentGroup);
-            }
-            
+            const groups = line.join('').split(/-1+/).filter(Boolean).map(s => s.length);
             return JSON.stringify(groups) === JSON.stringify(hints);
         }
         
         function showSolverInfo(message, progress) {
-            const info = document.getElementById('solverInfo');
-            const messageEl = document.getElementById('solverMessage');
-            
-            info.style.display = 'block';
-            messageEl.textContent = message;
+            document.getElementById('solverInfo').style.display = 'block';
+            document.getElementById('solverMessage').textContent = message;
             updateProgress(progress);
         }
         
@@ -755,385 +615,51 @@
             document.getElementById('progressFill').style.width = percent + '%';
         }
 
-        function analyzeLine(line, hints, lineLength) {
-            if (hints.length === 0) {
-                // Если нет подсказок, все клетки должны быть крестиками
-                return Array(lineLength).fill(-1);
-            }
-            
-            const result = Array(lineLength).fill(null);
-            
-            // 1. Simple Box - полное заполнение
-            const minLength = hints.reduce((sum, h) => sum + h, 0) + hints.length - 1;
-            if (minLength === lineLength) {
-                let pos = 0;
-                for (let i = 0; i < hints.length; i++) {
-                    if (i > 0) {
-                        result[pos++] = -1;
-                    }
-                    for (let j = 0; j < hints[i]; j++) {
-                        result[pos++] = 1;
-                    }
-                }
-                return result;
-            }
-            
-            // 2. Простой алгоритм перекрытий для каждой группы
-            let currentPos = 0;
-            for (let hintIdx = 0; hintIdx < hints.length; hintIdx++) {
-                const hintSize = hints[hintIdx];
-                
-                // Вычисляем минимальное пространство слева
-                const spaceLeft = hints.slice(0, hintIdx).reduce((sum, h) => sum + h + 1, 0);
-                
-                // Вычисляем минимальное пространство справа
-                const spaceRight = hints.slice(hintIdx + 1).reduce((sum, h) => sum + h + 1, 0);
-                
-                // Крайние возможные позиции для этой группы
-                const leftmostStart = spaceLeft;
-                const rightmostStart = lineLength - spaceRight - hintSize;
-                
-                // Проверяем, есть ли перекрытие
-                if (leftmostStart <= rightmostStart) {
-                    // Перекрытие существует от конца самого правого начала до начала самого левого конца
-                    const overlapStart = rightmostStart;
-                    const overlapEnd = leftmostStart + hintSize;
-                    
-                    // Закрашиваем только область перекрытия
-                    for (let i = overlapStart; i < overlapEnd && i < lineLength; i++) {
-                        if (i >= 0) {
-                            result[i] = 1;
-                        }
-                    }
-                }
-            }
-            
-            // 3. Проверяем уже заполненные клетки и применяем дополнительную логику
-            const segments = findFilledSegments(line);
-            
-            // Если есть заполненные сегменты, пробуем их сопоставить с подсказками
-            if (segments.length > 0) {
-                // Применяем более сложную логику с учетом существующих заполнений
-                const validPlacements = generateValidPlacements(line, hints, lineLength);
-                
-                if (validPlacements.length === 0) {
-                    // Нет валидных размещений - что-то не так
-                    return null;
-                }
-                
-                // Находим общие клетки во всех валидных размещениях
-                for (let i = 0; i < lineLength; i++) {
-                    const firstValue = validPlacements[0][i];
-                    if (validPlacements.every(p => p[i] === firstValue)) {
-                        result[i] = firstValue;
-                    }
-                }
-            }
-            
-            // 4. Применяем дополнительные правила
-            applySimpleRules(line, hints, result, lineLength);
-            
-            return result;
-        }
-        
-        function findFilledSegments(line) {
-            const segments = [];
-            let start = -1;
-            
-            for (let i = 0; i < line.length; i++) {
-                if (line[i] === 1) {
-                    if (start === -1) start = i;
-                } else if (start !== -1) {
-                    segments.push({ start, end: i - 1, length: i - start });
-                    start = -1;
-                }
-            }
-            if (start !== -1) {
-                segments.push({ start, end: line.length - 1, length: line.length - start });
-            }
-            
-            return segments;
-        }
-        
-        function applySimpleRules(line, hints, result, lineLength) {
-            // Правило 1: Если есть крестик, соседние клетки от заполненных тоже крестики
-            for (let i = 0; i < lineLength; i++) {
-                if (line[i] === 1 || result[i] === 1) {
-                    // Проверяем соседей
-                    if (i > 0 && (line[i-1] === -1 || result[i-1] === -1)) {
-                        // Слева крестик, значит это начало группы
-                        let groupEnd = i;
-                        while (groupEnd < lineLength && (line[groupEnd] === 1 || result[groupEnd] === 1)) {
-                            groupEnd++;
-                        }
-                        
-                        // Проверяем, может ли эта группа расшириться
-                        const groupLength = groupEnd - i;
-                        const canExtend = hints.some(h => h > groupLength);
-                        
-                        if (!canExtend && groupEnd < lineLength) {
-                            result[groupEnd] = -1;
-                        }
-                    }
-                }
-            }
-            
-            // Правило 2: Промежутки, которые слишком малы для любой подсказки
-            const minHint = Math.min(...hints);
-            let gapStart = -1;
-            
-            for (let i = 0; i <= lineLength; i++) {
-                const isCross = i === lineLength || line[i] === -1 || result[i] === -1;
-                
-                if (isCross) {
-                    if (gapStart !== -1) {
-                        const gapSize = i - gapStart;
-                        if (gapSize < minHint) {
-                            // Заполняем весь промежуток крестиками
-                            for (let j = gapStart; j < i; j++) {
-                                if (line[j] === 0) {
-                                    result[j] = -1;
-                                }
-                            }
-                        }
-                    }
-                    gapStart = i + 1;
-                } else if (line[i] === 1 || result[i] === 1) {
-                    gapStart = -1;
-                }
-            }
-            
-            // Правило 3: Если все подсказки "использованы"
-            const filledGroups = [];
-            let inGroup = false;
-            let groupSize = 0;
-            
-            for (let i = 0; i < lineLength; i++) {
-                if (line[i] === 1) {
-                    if (!inGroup) {
-                        inGroup = true;
-                        groupSize = 1;
-                    } else {
-                        groupSize++;
-                    }
-                } else if (inGroup) {
-                    filledGroups.push(groupSize);
-                    inGroup = false;
-                    groupSize = 0;
-                }
-            }
-            if (inGroup) {
-                filledGroups.push(groupSize);
-            }
-            
-            // Если количество групп равно количеству подсказок
-            if (filledGroups.length === hints.length) {
-                // Проверяем, совпадают ли размеры
-                let allMatch = true;
-                for (let i = 0; i < hints.length; i++) {
-                    if (filledGroups[i] !== hints[i]) {
-                        allMatch = false;
-                        break;
-                    }
-                }
-                
-                if (allMatch) {
-                    // Все группы найдены, остальные клетки - крестики
-                    for (let i = 0; i < lineLength; i++) {
-                        if (line[i] === 0 && result[i] === null) {
-                            result[i] = -1;
-                        }
-                    }
-                }
-            }
-        }
-        
-        function generateValidPlacements(line, hints, lineLength) {
-            const placements = [];
-            
-            function generate(hintIndex, position, current) {
-                if (hintIndex === hints.length) {
-                    // Проверяем, что все оставшиеся позиции могут быть пустыми
-                    const placement = [...current];
-                    for (let i = position; i < lineLength; i++) {
-                        if (line[i] === 1) return; // Конфликт - есть закрашенная клетка вне групп
-                        placement[i] = -1;
-                    }
-                    
-                    // Проверяем соответствие существующим клеткам
-                    for (let i = 0; i < lineLength; i++) {
-                        if (line[i] !== 0 && line[i] !== placement[i]) return;
-                    }
-                    
-                    placements.push(placement);
-                    return;
-                }
-                
-                const hintSize = hints[hintIndex];
-                const remainingHints = hints.slice(hintIndex + 1);
-                const minRemainingSpace = remainingHints.reduce((sum, h) => sum + h + 1, 0);
-                const maxPosition = lineLength - hintSize - minRemainingSpace;
-                
-                for (let start = position; start <= maxPosition; start++) {
-                    // Проверяем, можем ли разместить группу здесь
-                    let canPlace = true;
-                    
-                    // Проверка на крестики в группе
-                    for (let i = start; i < start + hintSize; i++) {
-                        if (line[i] === -1) {
-                            canPlace = false;
-                            break;
-                        }
-                    }
-                    
-                    // Проверка на заполненную клетку перед группой
-                    if (start > 0 && line[start - 1] === 1) canPlace = false;
-                    
-                    // Проверка на заполненную клетку после группы
-                    if (start + hintSize < lineLength && line[start + hintSize] === 1) canPlace = false;
-                    
-                    if (!canPlace) continue;
-                    
-                    // Создаем новое размещение
-                    const newPlacement = [...current];
-                    
-                    // Добавляем крестики перед группой
-                    for (let i = position; i < start; i++) {
-                        newPlacement[i] = -1;
-                    }
-                    
-                    // Добавляем группу
-                    for (let i = start; i < start + hintSize; i++) {
-                        newPlacement[i] = 1;
-                    }
-                    
-                    // Добавляем крестик после группы (если не последняя)
-                    if (hintIndex < hints.length - 1 && start + hintSize < lineLength) {
-                        newPlacement[start + hintSize] = -1;
-                        generate(hintIndex + 1, start + hintSize + 1, newPlacement);
-                    } else {
-                        generate(hintIndex + 1, start + hintSize, newPlacement);
-                    }
-                }
-            }
-            
-            generate(0, 0, Array(lineLength).fill(0));
-            return placements;
-        }
-
         function clearGrid() {
-            grid = Array(height).fill().map(() => Array(width).fill(0));
-            document.querySelectorAll('.game-cell').forEach(cell => {
-                cell.classList.remove('filled', 'crossed');
-                cell.style.background = '';
-            });
-            updateStats();
+            isSolving = false;
+            createGrid();
         }
 
         function updateStats() {
-            let filled = 0;
-            let crossed = 0;
-            
-            for (let i = 0; i < height; i++) {
-                for (let j = 0; j < width; j++) {
-                    if (grid[i][j] === 1) filled++;
-                    if (grid[i][j] === -1) crossed++;
-                }
-            }
-            
+            let filled = grid.flat().filter(c => c === 1).length;
+            let crossed = grid.flat().filter(c => c === -1).length;
             document.getElementById('statsInfo').innerHTML = 
                 `Закрашено: ${filled} | Крестиков: ${crossed} | Всего клеток: ${width * height}`;
         }
-
-        // Функция обработки нажатий клавиш для навигации по подсказкам
+        
         function handleHintKeyDown(e) {
             if (!currentFocusedInput) return;
             
-            const isTopHint = currentFocusedInput.dataset.col !== undefined;
-            const isLeftHint = currentFocusedInput.dataset.row !== undefined;
-            
+            const ds = currentFocusedInput.dataset;
             let nextInput = null;
             
-            if (e.key === 'ArrowUp') {
-                e.preventDefault();
-                if (isTopHint) {
-                    // Движение вверх по столбцу подсказок
-                    const col = parseInt(currentFocusedInput.dataset.col);
-                    const hintRow = parseInt(currentFocusedInput.dataset.hintRow);
-                    if (hintRow > 0) {
-                        nextInput = document.querySelector(`input[data-col="${col}"][data-hint-row="${hintRow - 1}"]`);
-                    }
-                } else if (isLeftHint) {
-                    // Движение вверх по левым подсказкам
-                    const row = parseInt(currentFocusedInput.dataset.row);
-                    const hintCol = parseInt(currentFocusedInput.dataset.hintCol);
-                    if (row > 0) {
-                        nextInput = document.querySelector(`input[data-row="${row - 1}"][data-hint-col="${hintCol}"]`);
-                    }
-                }
-            } else if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                if (isTopHint) {
-                    // Движение вниз по столбцу подсказок
-                    const col = parseInt(currentFocusedInput.dataset.col);
-                    const hintRow = parseInt(currentFocusedInput.dataset.hintRow);
-                    const maxTopHints = Math.ceil(height / 2);
-                    if (hintRow < maxTopHints - 1) {
-                        nextInput = document.querySelector(`input[data-col="${col}"][data-hint-row="${hintRow + 1}"]`);
-                    }
-                } else if (isLeftHint) {
-                    // Движение вниз по левым подсказкам
-                    const row = parseInt(currentFocusedInput.dataset.row);
-                    const hintCol = parseInt(currentFocusedInput.dataset.hintCol);
-                    if (row < height - 1) {
-                        nextInput = document.querySelector(`input[data-row="${row + 1}"][data-hint-col="${hintCol}"]`);
-                    }
-                }
-            } else if (e.key === 'ArrowLeft') {
-                e.preventDefault();
-                if (isTopHint) {
-                    // Движение влево по верхним подсказкам
-                    const col = parseInt(currentFocusedInput.dataset.col);
-                    const hintRow = parseInt(currentFocusedInput.dataset.hintRow);
-                    if (col > 0) {
-                        nextInput = document.querySelector(`input[data-col="${col - 1}"][data-hint-row="${hintRow}"]`);
-                    }
-                } else if (isLeftHint) {
-                    // Движение влево по левым подсказкам
-                    const row = parseInt(currentFocusedInput.dataset.row);
-                    const hintCol = parseInt(currentFocusedInput.dataset.hintCol);
-                    if (hintCol > 0) {
-                        nextInput = document.querySelector(`input[data-row="${row}"][data-hint-col="${hintCol - 1}"]`);
-                    }
-                }
-            } else if (e.key === 'ArrowRight') {
-                e.preventDefault();
-                if (isTopHint) {
-                    // Движение вправо по верхним подсказкам
-                    const col = parseInt(currentFocusedInput.dataset.col);
-                    const hintRow = parseInt(currentFocusedInput.dataset.hintRow);
-                    if (col < width - 1) {
-                        nextInput = document.querySelector(`input[data-col="${col + 1}"][data-hint-row="${hintRow}"]`);
-                    }
-                } else if (isLeftHint) {
-                    // Движение вправо по левым подсказкам
-                    const row = parseInt(currentFocusedInput.dataset.row);
-                    const hintCol = parseInt(currentFocusedInput.dataset.hintCol);
-                    const maxLeftHints = Math.ceil(width / 2);
-                    if (hintCol < maxLeftHints - 1) {
-                        nextInput = document.querySelector(`input[data-row="${row}"][data-hint-col="${hintCol + 1}"]`);
-                    }
-                }
+            if (e.key === 'ArrowUp' && ds.row) {
+                if (parseInt(ds.row) > 0) nextInput = document.querySelector(`input[data-row="${parseInt(ds.row) - 1}"][data-hint-col="${ds.hintCol}"]`);
+            } else if (e.key === 'ArrowDown' && ds.row) {
+                if (parseInt(ds.row) < height - 1) nextInput = document.querySelector(`input[data-row="${parseInt(ds.row) + 1}"][data-hint-col="${ds.hintCol}"]`);
+            } else if (e.key === 'ArrowLeft' && ds.row) {
+                 if (parseInt(ds.hintCol) > 0) nextInput = document.querySelector(`input[data-row="${ds.row}"][data-hint-col="${parseInt(ds.hintCol) - 1}"]`);
+            } else if (e.key === 'ArrowRight' && ds.row) {
+                const maxLeftHints = Math.ceil(width / 2);
+                if (parseInt(ds.hintCol) < maxLeftHints - 1) nextInput = document.querySelector(`input[data-row="${ds.row}"][data-hint-col="${parseInt(ds.hintCol) + 1}"]`);
+            } else if (e.key === 'ArrowUp' && ds.col) {
+                if (parseInt(ds.hintRow) > 0) nextInput = document.querySelector(`input[data-col="${ds.col}"][data-hint-row="${parseInt(ds.hintRow) - 1}"]`);
+            } else if (e.key === 'ArrowDown' && ds.col) {
+                const maxTopHints = Math.ceil(height / 2);
+                if (parseInt(ds.hintRow) < maxTopHints - 1) nextInput = document.querySelector(`input[data-col="${ds.col}"][data-hint-row="${parseInt(ds.hintRow) + 1}"]`);
+            } else if (e.key === 'ArrowLeft' && ds.col) {
+                if (parseInt(ds.col) > 0) nextInput = document.querySelector(`input[data-col="${parseInt(ds.col) - 1}"][data-hint-row="${ds.hintRow}"]`);
+            } else if (e.key === 'ArrowRight' && ds.col) {
+                if (parseInt(ds.col) < width - 1) nextInput = document.querySelector(`input[data-col="${parseInt(ds.col) + 1}"][data-hint-row="${ds.hintRow}"]`);
             }
             
-            if (nextInput) {
+            if(nextInput) {
+                e.preventDefault();
                 nextInput.focus();
-                currentFocusedInput = nextInput;
             }
         }
 
-        // Инициализация при загрузке
-        createGrid();
+        window.onload = createGrid;
     </script>
 </body>
 </html>
